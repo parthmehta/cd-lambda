@@ -2,9 +2,46 @@ var serverless = require("serverless")
 var exec = require('child_process').exec;
 var path = require('path')
 var NodeGit = require('nodegit')
+const log4js = require('log4js');
+var logger = log4js.getLogger('console');
+
+logmailer = log4js.getLogger("mailer");
+
+log4js.configure({
+  appenders: [
+    {
+      type: 'stdout',
+      category: 'console'
+    }, {
+      "type": "smtp",
+      "recipients": "logfilerecipient@logging.com",
+      "sendInterval": 5,
+      "transport": "SMTP",
+      "SMTP": {
+        "host": "smtp.gmail.com",
+        "secureConnection": true,
+        "port": 465,
+        "auth": {
+          "user": "someone@gmail",
+          "pass": "********************"
+        },
+        "debug": true
+      },
+      "category": "mailer"
+    }
+  ],
+  categories: {
+    default: {
+      appenders: [
+        'out', 'mailer'
+      ],
+      level: 'debug'
+    }
+  }
+});
 
 //TODO
-const folderPath = "./tmp"
+const folderPath = "./tmp/"
 
 function getSNSMessageObject(msgString) {
   var x = msgString.replace(/\\/g, '');
@@ -22,40 +59,37 @@ var test = exports.handler = function(event, context) {
   let cloneURL = gitHubEvent.repository.clone_url;
   let branchName = gitHubEvent.repository.branch
 
-  console.log("EVENT_RECIEVED", JSON.stringify(gitHubEvent));
+  logger.info("EVENT_RECIEVED", gitHubEvent);
 
   //TODO
   if (branchName && gitHubEvent.repository.action == "merged") {
 
     let pathTofolder = path.resolve(__dirname, folderPath + appName)
 
-
-
     let openRepo = new Promise((resolve, reject) => {
-      NodeGit.Repository.open(pathTofolder).then((repo) => {
-        console.info('openRepo successfully', repo);
+      return NodeGit.Repository.open(pathTofolder).then((repo) => {
+        logger.info('OPEN_REPO', "SUCCESS", repo);
         resolve(repo);
       }).catch((errOpen) => {
-        console.error('Not a Git Repository', errResult);
+        logger.error('OPEN_REPO', "FAILED", errResult);
         //TODO
         Git.Clone(gitHubEvent.cloneURl, pathTofolder).then(function(repository) {
-          console.error('Clone successfully', repository);
+          logger.error('CLONE_REPO', "SUCCESS", repository);
           resolve(repository)
         }).catch((errClone) => {
-          console.log("Error occured", errClone)
+          logger.info("CLONE_REPO", "FAILED", errClone)
           reject(errClone)
         });
       })
     })
 
-
-
     let pullBranch = new Promise((resolve, reject) => {
 
       NodeGit.Repository.open(pathTofolder).catch((errResult) => {
-        console.log("Fetch the code")
+        logger.error("PULL_BRANCH", "OPEN_FAILED", errResult)
+        return
       }).then((repo) => {
-        console.log('pullBranch Open successfully', repo);
+        logger.info('PULL_BRANCH', "OPEN SUCCESS", repo);
         // TODO GIT CHECKOUT
         return repo.getBranch('refs/remotes/origin/' + branchName).then(function(reference) {
           //checkout branch
@@ -67,7 +101,7 @@ var test = exports.handler = function(event, context) {
                   return 1;
                 }
               }
-            }).catch((errFetch) => {})then(function(fetches) {
+            }).catch((errFetch) => {}).then(function(fetches) {
               // Now that we're finished fetching, go ahead and merge
               //TODO
               // var signature = NodeGit.Signature.now("TableauDeploymentTool", "ab@c.de");
@@ -80,23 +114,30 @@ var test = exports.handler = function(event, context) {
       })
     })
 
-
-
     //TODO
     let deployCode = new Promise((resolve, reject) => {
-      let cmd = 'cd ' folderPath + "/" + appName + ' && serverless deploy';
+      let cmd = 'cd ' + folderPath + "/" + appName + ' && serverless deploy';
       exec(cmd, function(error, stdout, stderr) {
         // command output is in stdout
         if (!error) {
+          // logmailer.info("DEPLOYED", "SUCCESS", {
+          //   appName: appName,
+          //   branchName: branchName
+          // })
           resolve("successfully deplyed", stdout)
         } else {
+          // logmailer.info("DEPLOYED", "FAILED", {
+          //   appName: appName,
+          //   branchName: branchName
+          // })
           reject("Error occered", error, stderr)
         }
       })
     })
 
     //TODO Notify Status
-    Promise.all([openRepo, pullBranch, deployCode]).then((data) => console.log(data)).catch((err) => console.log(err))
+    Promise.all([openRepo]).then((data) => console.log(data)).catch((err) => console.log(err))
+
   }
 }
 
@@ -106,10 +147,10 @@ var dummyEvent = {
       Sns: {
         Message: {
           repository: {
-            name: 'admin',
+            name: 'gea-store-admin',
             branch: "master",
             action: "merged",
-            clone_url: ""
+            clone_url: "https://github.appl.ge.com/Webcommerce/gea-store-admin.git"
           }
         }
       }
