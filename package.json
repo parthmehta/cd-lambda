@@ -1,0 +1,20 @@
+{
+  "name": "cd-lamda",
+  "version": "1.0.0",
+  "description": "Lamda Function as a Git Hook and autodeploy Serverless on AWS",
+  "main": "index.js",
+  "scripts": {
+    "test": "test"
+  },
+  "keywords": [
+    "Lamda",
+    "Git",
+    "Hook",
+    "Serverless"
+  ],
+  "author": "Parth",
+  "license": "ISC",
+  "dependencies": {
+    "nodegit": "^0.18.3"
+  }
+}
