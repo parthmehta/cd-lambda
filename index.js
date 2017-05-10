@@ -162,10 +162,10 @@ var dummyEvent = {
       Sns: {
         Message: {
           repository: {
-            name: 'gea-store-admin',
+            name: 'git_repo',
             branch: "master",
             action: "merged",
-            clone_url: "https://github.appl.ge.com/Webcommerce/gea-store-admin.git"
+            clone_url: "URL"
           }
         }
       }
