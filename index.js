@@ -2,45 +2,11 @@ var serverless = require("serverless")
 var exec = require('child_process').exec;
 var path = require('path')
 var NodeGit = require('nodegit')
-const log4js = require('log4js');
-var logger = log4js.getLogger('console');
+const Promise = require('bluebird');
+var log4j = require("./logger")
+var logger = log4j.getLogger('console');
+var logmailer = log4j.getLogger("mailer");
 
-logmailer = log4js.getLogger("mailer");
-
-log4js.configure({
-  appenders: [
-    {
-      type: 'stdout',
-      category: 'console'
-    }, {
-      "type": "smtp",
-      "recipients": "logfilerecipient@logging.com",
-      "sendInterval": 5,
-      "transport": "SMTP",
-      "SMTP": {
-        "host": "smtp.gmail.com",
-        "secureConnection": true,
-        "port": 465,
-        "auth": {
-          "user": "someone@gmail",
-          "pass": "********************"
-        },
-        "debug": true
-      },
-      "category": "mailer"
-    }
-  ],
-  categories: {
-    default: {
-      appenders: [
-        'out', 'mailer'
-      ],
-      level: 'debug'
-    }
-  }
-});
-
-//TODO
 const folderPath = "tmp"
 
 function getSNSMessageObject(msgString) {
@@ -71,6 +37,7 @@ var test = exports.handler = function(event, context) {
         NodeGit.Repository.open(pathTofolder).then((repo) => {
           logger.info('OPEN_REPO', "SUCCESS", repo);
           resolve(repo);
+          pullBranch()
         }).catch((errOpen) => {
           logger.error('OPEN_REPO', "FAILED", errOpen);
           //TODO
@@ -84,9 +51,10 @@ var test = exports.handler = function(event, context) {
             }
           }
 
-          NodeGit.Clone(cloneURL, path.resolve(__dirname, folderPath, appName), fetchOptions).then(function(repository) {
+          NodeGit.Clone(cloneURL, pathTofolder, fetchOptions).then(function(repository) {
             logger.info('CLONE_REPO', "SUCCESS", repository);
             resolve(repository)
+            pullBranch()
           }).catch((errClone) => {
             logger.info("CLONE_REPO", "FAILED", errClone)
             reject(errClone)
@@ -101,10 +69,12 @@ var test = exports.handler = function(event, context) {
           logger.error("PULL_BRANCH", "OPEN_FAILED", errResult)
           return
         }).then((repo) => {
+
           logger.info('PULL_BRANCH', "OPEN SUCCESS", repo);
           // TODO GIT CHECKOUT
-          return repo.getBranch('refs/remotes/origin/' + branchName).then(function(reference) {
+          return repo.getBranch('origin/' + branchName).then(function(reference) {
             //checkout branch
+            logger.info("PULL_BRANCH", "GET_BRANCH_SUCCESS", branchName, reference)
             return repo.checkoutRef(reference).then((checkoutRef) => {
 
               return repo.fetch("origin/" + branchName, {
@@ -117,7 +87,9 @@ var test = exports.handler = function(event, context) {
                 // Now that we're finished fetching, go ahead and merge
                 //TODO
                 // var signature = NodeGit.Signature.now("TableauDeploymentTool", "ab@c.de");
-                return repository.mergeBranches(branchName, "origin/" + branchName, null, null, {fileFavor: NodeGit.Merge.FILE_FAVOR.THEIRS});
+                return repository.mergeBranches(branchName, "origin/" + branchName, null, null, {
+                  fileFavor: NodeGit.Merge.FILE_FAVOR.THEIRS
+                });
               })
             })
 
@@ -150,27 +122,24 @@ var test = exports.handler = function(event, context) {
       })
     }
 
-    //TODO Notify Status
-    Promise.all([openRepo(), pullBranch(), deployCode()]).then((data) => console.log(data)).catch((err) => console.log(err))
+    openRepo()
 
   }
 }
 
 var dummyEvent = {
-  Records: [
-    {
-      Sns: {
-        Message: {
-          repository: {
-            name: 'git_repo',
-            branch: "master",
-            action: "merged",
-            clone_url: "URL"
-          }
+  Records: [{
+    Sns: {
+      Message: {
+        repository: {
+          name: 'less-practice',
+          branch: "master",
+          action: "merged",
+          clone_url: "https://github.com/parthmehta/less-practice"
         }
       }
     }
-  ]
+  }]
 }
 
 test(dummyEvent, null)
