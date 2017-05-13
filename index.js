@@ -8,10 +8,9 @@ var logger = log4j.getLogger("console")
 var logmailer = log4j.getLogger("mailer")
 var fs = require("fs")
 
-const folderPath = "tmp"
-
-if (!fs.existsSync(folderPath)) {
-    fs.mkdirSync(folderPath)
+let options = {
+    folderPath: "tmp",
+    sendMail: false
 }
 
 function getSNSMessageObject(msgString) {
@@ -39,7 +38,11 @@ exports.handler = function (event, context) {
 
     if (deployCondition()) {
 
-        let pathTofolder = path.resolve(__dirname, folderPath, appName)
+        if (!fs.existsSync(options.folderPath)) {
+            fs.mkdirSync(options.folderPath)
+        }
+
+        let pathTofolder = path.resolve(__dirname, options.folderPath, appName)
 
         let openRepo = function () {
 
@@ -125,22 +128,24 @@ exports.handler = function (event, context) {
 
             return new Promise((resolve, reject) => {
 
-                let cmd = "cd " + folderPath + "/" + appName + " && node ../../node_modules/serverless/lib/Serverless.js deploy"
+                let cmd = "cd " + options.folderPath + "/" + appName + " && node ../../node_modules/serverless/lib/Serverless.js deploy"
 
                 exec(cmd, function (error, stdout, stderr) {
                     // command output is in stdout
                     if (!error) {
-                        // logmailer.info("DEPLOYED", "SUCCESS", {
-                        //   appName: appName,
-                        //   branchName: branchName
-                        // })
+                        if (options.sendMail)
+                            logmailer.info("DEPLOYED", "SUCCESS", {
+                                appName: appName,
+                                branchName: branchName
+                            })
                         logger.info("DEPLOY", "SUCCESS")
                         resolve("successfully deployed", stdout)
                     } else {
-                        // logmailer.info("DEPLOYED", "FAILED", {
-                        //   appName: appName,
-                        //   branchName: branchName
-                        // })
+                        if (options.sendMail)
+                            logmailer.info("DEPLOYED", "FAILED", {
+                                appName: appName,
+                                branchName: branchName
+                            })
                         logger.info("DEPLOY", "FAILED", error, stderr)
                         reject("Error occered", error, stderr)
                     }
