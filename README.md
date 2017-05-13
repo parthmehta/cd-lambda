@@ -1,4 +1,4 @@
-# cd-lamda
+# cd-lambda
 Serverless code deployment with AWS SNS and AWS Lambda Function.
 
 # Use case
@@ -6,7 +6,7 @@ You want to deploy your AWS Lambda serverless code. So, you may either do it fro
 This project aims at continuing your serverless philosophy to code deployments with a Lamda function acting as GitHub event listener.
 
 
-##Usage
+# Usage
 
 
 
