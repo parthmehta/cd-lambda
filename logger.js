@@ -1,10 +1,10 @@
-const log4js = require('log4js');
+const log4js = require("log4js")
 
 log4js.configure({
     appenders: [
         {
-            type: 'stdout',
-            category: 'console'
+            type: "stdout",
+            category: "console"
         }, {
             "type": "smtp",
             "recipients": "logfilerecipient@logging.com",
@@ -26,11 +26,11 @@ log4js.configure({
     categories: {
         default: {
             appenders: [
-                'out', 'mailer'
+                "out", "mailer"
             ],
-            level: 'debug'
+            level: "debug"
         }
     }
-});
+})
 
 module.exports = log4js

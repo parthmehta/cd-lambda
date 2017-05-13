@@ -1,113 +1,132 @@
-var serverless = require("serverless")
-var exec = require('child_process').exec;
-var path = require('path')
-var NodeGit = require('nodegit')
-const Promise = require('bluebird');
+"use strict"
+
+var exec = require("child_process").exec
+var path = require("path")
+var NodeGit = require("nodegit")
 var log4j = require("./logger")
-var logger = log4j.getLogger('console');
-var logmailer = log4j.getLogger("mailer");
-var fs = require('fs');
+var logger = log4j.getLogger("console")
+var logmailer = log4j.getLogger("mailer")
+var fs = require("fs")
 
 const folderPath = "tmp"
 
 if (!fs.existsSync(folderPath)) {
-    fs.mkdirSync(folderPath);
+    fs.mkdirSync(folderPath)
 }
+
 function getSNSMessageObject(msgString) {
-    // var x = msgString.replace(/\\/g, '');
-    // var y = x.substring(1, x.length - 1);
-    var z = JSON.parse(msgString);
-    return z;
+    msgString = JSON.parse(msgString);
+    return msgString
 }
 
-var test = exports.handler = function (event, context) {
+exports.handler = function (event, context) {
 
 
-    let gitHubEventStr = event.Records[0].Sns.Message;
-    let gitHubEvent = getSNSMessageObject(gitHubEventStr);
-    let appName = gitHubEvent.repository.name;
-    let cloneURL = gitHubEvent.repository.clone_url;
+    let gitHubEventStr = event.Records[0].Sns.Message
+    let gitHubEvent = getSNSMessageObject(gitHubEventStr)
+    let appName = gitHubEvent.repository.name
+    let cloneURL = gitHubEvent.repository.clone_url
     let branchName = gitHubEvent.ref.split("/")[2]
+    let repository = null
 
-    logger.info("EVENT_RECIEVED", gitHubEvent);
-    console.log(appName, cloneURL, branchName)
-    
-    //TODO
-    if ((branchName === "dev" || branchName === "stage" || branchName === "master") && gitHubEvent.commits.length > 0) {
+    logger.info("EVENT_RECIEVED", gitHubEvent)
+    logger.info(appName, cloneURL, branchName)
 
+    let deployCondition = function () {
+        return (branchName === "dev" || branchName === "stage" || branchName === "master") && gitHubEvent.commits.length > 0
+    }
+
+
+    if (deployCondition()) {
 
         let pathTofolder = path.resolve(__dirname, folderPath, appName)
 
         let openRepo = function () {
+
             return new Promise((resolve, reject) => {
+
                 NodeGit.Repository.open(pathTofolder).then((repo) => {
-                    logger.info('OPEN_REPO', "SUCCESS", repo);
-                    resolve(repo);
+
+                    logger.info("OPEN_REPO", "SUCCESS", repo)
+                    resolve(repo)
                     pullBranch()
+
                 }).catch((errOpen) => {
-                    logger.error('OPEN_REPO', "FAILED", errOpen);
-                    //TODO
+
+                    logger.error("OPEN_REPO", "FAILED", errOpen)
+
                     let fetchOptions = {
                         fetchOpts: {
                             callbacks: {
                                 certificateCheck: function () {
-                                    return 1;
+                                    return 1
                                 }
                             }
                         }
                     }
 
                     NodeGit.Clone(cloneURL, pathTofolder, fetchOptions).then(function (repository) {
-                        logger.info('CLONE_REPO', "SUCCESS", repository);
+                        logger.info("CLONE_REPO", "SUCCESS", repository)
                         resolve(repository)
                         pullBranch()
                     }).catch((errClone) => {
                         logger.info("CLONE_REPO", "FAILED", errClone)
                         reject(errClone)
-                    });
+                    })
                 })
             })
         }
 
         let pullBranch = function () {
+
             return new Promise((resolve, reject) => {
+
                 NodeGit.Repository.open(pathTofolder).catch((errResult) => {
+
                     logger.error("PULL_BRANCH", "OPEN_FAILED", errResult)
                     return
+
                 }).then((repo) => {
 
-                    logger.info('PULL_BRANCH', "OPEN SUCCESS", repo);
-
+                    logger.info("PULL_BRANCH", "OPEN SUCCESS", repo)
+                    repository = repo
                     return repo.fetch("origin/" + branchName, {
                         callbacks: {
                             certificateCheck: function () {
-                                return 1;
+                                return 1
                             }
                         }
+
                     }).catch((errFetch) => {
+                        logger.error("PULL_BRANCH", "FETCH FAILED", errFetch)
+                        reject(errFetch)
                     }).then(function (fetches) {
-                        // Now that we're finished fetching, go ahead and merge
-                        //TODO
-                        // var signature = NodeGit.Signature.now("TableauDeploymentTool", "ab@c.de");
+
+                        logger.info("PULL_BRANCH", "FETCH SUCCESS", fetches)
                         return repository.mergeBranches(branchName, "origin/" + branchName, null, null, {
                             fileFavor: NodeGit.Merge.FILE_FAVOR.THEIRS
                         }).then((mergeResult) => {
-                            // TODO GIT CHECKOUT
-                            //Nodegit.Checkout.head(repo, null).then(function () {
-                            // checkout complete
-                            //});
-                        });
+
+                            logger.info("PULL_BRANCH", "MERGE SUCCESS", mergeResult)
+                            return repo.checkoutBranch(branchName)
+                                .then(function () {
+                                    logger.info("PULL_BRANCH", "CHECKOUT SUCCESS")
+                                    deployCode()
+                                })
+
+                        })
                     })
-
-
                 })
             })
         }
 
-        //TODO
+
         let deployCode = function () {
+
             return new Promise((resolve, reject) => {
-                let cmd = 'cd ' + folderPath + "/" + appName + ' && serverless deploy';
+
+                let cmd = "cd " + folderPath + "/" + appName + " && node ../../node_modules/serverless/lib/Serverless.js deploy"
+
                 exec(cmd, function (error, stdout, stderr) {
                     // command output is in stdout
                     if (!error) {
@@ -115,12 +134,14 @@ var test = exports.handler = function (event, context) {
                         //   appName: appName,
                         //   branchName: branchName
                         // })
-                        resolve("successfully deplyed", stdout)
+                        logger.info("DEPLOY", "SUCCESS")
+                        resolve("successfully deployed", stdout)
                     } else {
                         // logmailer.info("DEPLOYED", "FAILED", {
                         //   appName: appName,
                         //   branchName: branchName
                         // })
+                        logger.info("DEPLOY", "FAILED", error, stderr)
                         reject("Error occered", error, stderr)
                     }
                 })
@@ -131,15 +152,3 @@ var test = exports.handler = function (event, context) {
 
     }
 }
-
-//
-// var MessaeDetails = require("./gitevent.json")
-// var dummyEvent = {
-//     Records: [{
-//         Sns: {
-//             Message: MessaeDetails
-//         }
-//     }]
-// }
-//
-// test(dummyEvent, null)
